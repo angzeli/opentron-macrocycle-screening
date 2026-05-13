@@ -2,4 +2,10 @@
 name = "opentrons-macrocycle-screening"
 version = "0.1.0"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "ipykernel>=6.31.0",
+    "matplotlib",
+    "numpy",
+    "opentrons",
+    "pandas",
+]

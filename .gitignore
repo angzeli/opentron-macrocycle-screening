@@ -1,0 +1,36 @@
+# Python caches and build output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments and local dependency folders
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Jupyter notebook runtime files
+.ipynb_checkpoints/
+
+# Local editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Opentrons / run logs generated locally
+*.log
+run_logs/
+simulation_output/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

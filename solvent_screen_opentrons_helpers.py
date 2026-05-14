@@ -77,6 +77,47 @@ def log_absolute_time_tick(
     return timestamp
 
 
+def load_source_plates(
+    protocol: Any,
+    labware_name: str,
+    plate_locations: Iterable[Any],
+    name_prefix: str = "plate_8",
+    echo: bool = True,
+) -> dict[str, Any]:
+    """
+    Load one or more source plates and return them in a named dictionary.
+
+    Example:
+    source_plates = load_source_plates(protocol, "greenaway_8_wellplate_20000ul", [3, 4])
+    plate_8_1 = source_plates["plate_8_1"]
+    plate_8_2 = source_plates["plate_8_2"]
+    """
+    locations = list(plate_locations)
+    if len(locations) == 0:
+        raise ValueError("At least one source plate location is required.")
+
+    normalised_locations = [str(location).strip() for location in locations]
+    if any(location == "" for location in normalised_locations):
+        raise ValueError("Source-plate deck slots must be non-empty.")
+
+    if len(set(normalised_locations)) != len(normalised_locations):
+        raise ValueError("Duplicate source-plate deck slots detected.")
+
+    if not isinstance(name_prefix, str) or name_prefix.strip() == "":
+        raise ValueError("name_prefix must be a non-empty string.")
+
+    source_plates = {}
+    for index, location in enumerate(locations, start=1):
+        plate_name = f"{name_prefix.strip()}_{index}"
+        source_plates[plate_name] = protocol.load_labware(
+            labware_name,
+            location=location,
+        )
+        log_step(protocol, f"Loaded source plate {plate_name} in deck slot {location}.", echo=echo)
+
+    return source_plates
+
+
 def set_robot_speeds(
     protocol: Any,
     pipette: Any,
@@ -210,6 +251,12 @@ def build_solvent_screen_plate_map(
             raise ValueError(f"Unknown solvent condition: {condition_name}")
 
         condition = solvent_conditions[condition_name]
+        for required_key in ["diamine_source", "dialdehyde_source", "row"]:
+            if required_key not in condition:
+                raise ValueError(f'Solvent condition "{condition_name}" must define "{required_key}".')
+            if condition[required_key] is None:
+                raise ValueError(f'Solvent condition "{condition_name}" has no value for "{required_key}".')
+
         row = normalise_condition_row(condition)
         target_wells = build_replicate_wells(row=row, n_replicates=n_replicates, start_column=start_column)
 

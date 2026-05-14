@@ -14,15 +14,16 @@ opentrons_macrocycle_screening/
 │   ├── calibration_curve.ipynb
 │   ├── accuracy_test_chloroform_before_optimisation.pdf
 │   └── accuracy_test_chloroform_after_optimisation.pdf
+├── conc_opentrons.ipynb
+├── conc_opentrons_helpers.py
 ├── kinetic_opentrons.ipynb
 ├── kinetic_opentrons_helpers.py
 ├── solvent_screen_opentrons.ipynb
 ├── solvent_screen_opentrons_helpers.py
-├── pyproject.toml
 ├── LICENSE
+├── pyproject.toml
 ├── README.md
-├── .gitignore
-└── 
+└── .gitignore
 ```
 
 ## 🔧 Requirements

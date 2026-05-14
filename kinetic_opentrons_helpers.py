@@ -7,7 +7,8 @@ from __future__ import annotations
 import math
 import time
 from datetime import datetime
-from typing import Any, Iterable, Optional
+from numbers import Real
+from typing import Any, Optional
 
 # Default liquid-handling parameters. These can be overridden from the notebook.
 DEFAULT_MAX_DISPENSE = 200          # uL; two thirds of the P300 volume
@@ -24,8 +25,6 @@ DEFAULT_PIPETTE_DEFAULT_SPEED = 400  # mm/s; Opentrons default is often conserva
 DEFAULT_MAX_HEAD_SPEED = 400         # mm/s for X/Y/Z/A axes when supported
 DEFAULT_TOUCH_TIP_SPEED = 40         # mm/s; keep rim-touching slow to avoid splashing/droplet flicking
 
-VALID_48_WELL_ROWS = tuple("ABCDEF")
-VALID_48_WELL_COLUMNS = range(1, 9)
 P300_FALLBACK_MAX_VOLUME = 300
 
 
@@ -36,26 +35,6 @@ def _pipette_max_volume(pipette: Any) -> float:
     except (TypeError, ValueError):
         return float(P300_FALLBACK_MAX_VOLUME)
 
-
-def _normalise_48_well_row(row: Any) -> str:
-    if not isinstance(row, str):
-        raise ValueError("48-well plate row names must be strings A-F.")
-
-    normalised_row = row.strip().upper()
-    if normalised_row not in VALID_48_WELL_ROWS:
-        raise ValueError("48-well plate rows must be A-F.")
-
-    return normalised_row
-
-
-def _validate_48_well_column(column: Any) -> int:
-    if not isinstance(column, int) or isinstance(column, bool):
-        raise ValueError("48-well plate columns must be integers 1-8.")
-
-    if column not in VALID_48_WELL_COLUMNS:
-        raise ValueError("48-well plate columns must be 1-8.")
-
-    return column
 
 def set_robot_speeds(
     protocol: Any,
@@ -161,63 +140,79 @@ def calculate_dispense(total_vol: float, max_dispense: float = DEFAULT_MAX_DISPE
     last_value = round(total_vol - sum(disp), 2)
     return disp + [last_value]
 
-def build_target_wells(
-    rows: Iterable[str],
-    columns: Optional[Iterable[int]] = None,
-    n_columns: Optional[int] = None,
-    ) -> list[str]:
+def build_vertical_triplicate_wells(timepoint_index: int) -> list[str]:
     """
-    Build target wells in column-major order.
+    Build vertical triplicate wells for one kinetic time point.
 
-    Example for rows A-C:
-    column 1 = A1, B1, C1 = three repeats for the first time point.
-
-    Either pass explicit columns, e.g. range(1, 7), or pass n_columns=6.
+    Time points 1-8 use rows A/B/C across columns 1-8.
+    Time points 9-16 use rows D/E/F across columns 1-8.
     """
-    validated_rows = [_normalise_48_well_row(row) for row in rows]
+    if not isinstance(timepoint_index, int) or isinstance(timepoint_index, bool):
+        raise ValueError("timepoint_index must be an integer between 1 and 16.")
 
-    if columns is None:
-        if n_columns is None:
-            n_columns = 6
-        if not isinstance(n_columns, int) or isinstance(n_columns, bool) or n_columns <= 0:
-            raise ValueError("n_columns must be positive.")
-        columns = range(1, n_columns + 1)
+    if not 1 <= timepoint_index <= 16:
+        raise ValueError("timepoint_index must be between 1 and 16 inclusive.")
 
-    validated_columns = [_validate_48_well_column(col) for col in columns]
+    if timepoint_index <= 8:
+        rows = ["A", "B", "C"]
+        column = timepoint_index
+    else:
+        rows = ["D", "E", "F"]
+        column = timepoint_index - 8
 
-    return [f"{row}{col}" for col in validated_columns for row in validated_rows]
+    return [f"{row}{column}" for row in rows]
 
 
-def build_timepoint_map(rows: Iterable[str], timepoints_min: list[float], start_column: int = 1) -> list[dict[str, Any]]:
+def build_timepoint_map(timepoints_min: list[float]) -> list[dict[str, Any]]:
     """
-    Build an explicit time-point map without using fragile string matching.
+    Build an explicit 48-well kinetic time-point map.
 
     Each entry contains:
     - time_min: the nominal kinetic time point
-    - column: plate column
+    - timepoint_index: the 1-based vertical triplicate block index
+    - plate_region: upper for A/B/C blocks or lower for D/E/F blocks
     - wells: replicate wells for that time point
     """
     if len(timepoints_min) == 0:
         raise ValueError("At least one time point is required.")
 
-    validated_rows = [_normalise_48_well_row(row) for row in rows]
-    start_column = _validate_48_well_column(start_column)
+    if len(timepoints_min) > 16:
+        raise ValueError("TIMEPOINTS_MIN must contain no more than 16 time points for the vertical triplicate 48-well layout.")
 
-    end_column = start_column + len(timepoints_min) - 1
-    if end_column > 8:
-        raise ValueError("Time points must fit within columns 1-8 of the 48-well plate.")
+    for time_min in timepoints_min:
+        if not isinstance(time_min, Real) or isinstance(time_min, bool):
+            raise ValueError("TIMEPOINTS_MIN values must be numeric minute labels.")
+        if time_min < 0:
+            raise ValueError("TIMEPOINTS_MIN values must be non-negative.")
+
+    if len(set(timepoints_min)) != len(timepoints_min):
+        raise ValueError(
+            "TIMEPOINTS_MIN contains duplicate nominal time values. "
+            "Use unique nominal time labels for robust kinetic summaries."
+        )
 
     timepoint_map = []
-    for column_offset, time_min in enumerate(timepoints_min):
-        col = _validate_48_well_column(start_column + column_offset)
-        replicate_wells = [f"{row}{col}" for row in validated_rows]
+    for timepoint_index, time_min in enumerate(timepoints_min, start=1):
         timepoint_map.append({
             "time_min": time_min,
-            "column": col,
-            "wells": replicate_wells,
+            "timepoint_index": timepoint_index,
+            "plate_region": "upper" if timepoint_index <= 8 else "lower",
+            "wells": build_vertical_triplicate_wells(timepoint_index),
         })
 
     return timepoint_map
+
+
+def flatten_timepoint_wells(timepoint_map: list[dict[str, Any]]) -> list[str]:
+    """Flatten a kinetic time-point map into target-well order and reject duplicates."""
+    target_wells = []
+    for entry in timepoint_map:
+        target_wells.extend(entry["wells"])
+
+    if len(set(target_wells)) != len(target_wells):
+        raise ValueError("Duplicate target wells detected in timepoint map.")
+
+    return target_wells
 
 
 def validate_volume_for_p300(
@@ -516,7 +511,7 @@ def summarise_middle_replicate_finish_times(
     Instead, it matches records by well name.
 
     For each time point, the middle well in `entry["wells"]` is used as the representative
-    timestamp. For triplicates such as A1/B1/C1, this uses B1.
+    timestamp. For triplicates such as A1/B1/C1, this uses B1; for D1/E1/F1, this uses E1.
 
     Absolute timestamps are recorded to the nearest second.
     """
@@ -544,7 +539,8 @@ def summarise_middle_replicate_finish_times(
 
         summary_record = {
             "time_min": entry["time_min"],
-            "column": entry["column"],
+            "timepoint_index": entry["timepoint_index"],
+            "plate_region": entry["plate_region"],
             "representative_well": middle_well,
             "dispense_order_index": dispense_order_index,
             "finish_timestamp": finish_timestamp,
@@ -560,7 +556,8 @@ def summarise_middle_replicate_finish_times(
         log_step(
             protocol,
             f"Representative kinetic start for nominal {entry['time_min']} min "
-            f"time point = {middle_well} (dispense order {dispense_order_index}), {time_text}.",
+            f"time point {entry['timepoint_index']} = {middle_well} "
+            f"(dispense order {dispense_order_index}), {time_text}.",
             echo=echo,
         )
 
@@ -580,7 +577,7 @@ def log_reverse_dialdehyde_order(
 
     The returned well order starts the longest nominal time point first and the shortest
     nominal time point last. Within each triplicate, the listed replicate order is preserved,
-    e.g. A6, B6, C6.
+    e.g. A6, B6, C6 or D2, E2, F2.
     """
     ordered_wells = []
     for entry in sorted(timepoint_map, key=lambda item: item["time_min"], reverse=True):
@@ -589,7 +586,7 @@ def log_reverse_dialdehyde_order(
         log_step(
             protocol,
             f"Reverse dialdehyde order: nominal {entry['time_min']} min time point, "
-            f"column {entry['column']} -> {', '.join(wells)}.",
+            f"timepoint {entry['timepoint_index']} ({entry['plate_region']}) -> {', '.join(wells)}.",
             echo=echo,
         )
 

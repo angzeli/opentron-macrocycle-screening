@@ -22,8 +22,6 @@ DEFAULT_PIPETTE_DEFAULT_SPEED = 400  # mm/s
 DEFAULT_MAX_HEAD_SPEED = 400         # mm/s for X/Y/Z/A axes when supported
 DEFAULT_TOUCH_TIP_SPEED = 40         # mm/s; keep rim-touching slow to avoid splashing/droplet flicking
 
-VALID_48_WELL_ROWS = tuple("ABCDEF")
-VALID_48_WELL_COLUMNS = range(1, 9)
 P300_FALLBACK_MAX_VOLUME = 300
 
 
@@ -33,27 +31,6 @@ def _pipette_max_volume(pipette: Any) -> float:
         return float(getattr(pipette, "max_volume", P300_FALLBACK_MAX_VOLUME))
     except (TypeError, ValueError):
         return float(P300_FALLBACK_MAX_VOLUME)
-
-
-def _normalise_48_well_row(row: Any) -> str:
-    if not isinstance(row, str):
-        raise ValueError("48-well plate row names must be strings A-F.")
-
-    normalised_row = row.strip().upper()
-    if normalised_row not in VALID_48_WELL_ROWS:
-        raise ValueError("48-well plate rows must be A-F.")
-
-    return normalised_row
-
-
-def _validate_48_well_column(column: Any) -> int:
-    if not isinstance(column, int) or isinstance(column, bool):
-        raise ValueError("48-well plate columns must be integers 1-8.")
-
-    if column not in VALID_48_WELL_COLUMNS:
-        raise ValueError("48-well plate columns must be 1-8.")
-
-    return column
 
 
 def log_step(protocol: Optional[Any], message: str, echo: bool = True) -> None:
@@ -178,99 +155,88 @@ def calculate_dispense(
     return dispenses + [last_value]
 
 
-def build_replicate_wells(row: str, n_replicates: int = 3, start_column: int = 1) -> list[str]:
-    """Build replicate wells for one solvent condition, e.g. A1, A2, A3."""
-    if not isinstance(n_replicates, int) or isinstance(n_replicates, bool) or n_replicates <= 0:
-        raise ValueError("n_replicates must be positive.")
-
-    validated_row = _normalise_48_well_row(row)
-    start_column = _validate_48_well_column(start_column)
-
-    if start_column + n_replicates - 1 > 8:
-        raise ValueError("Replicates must fit within columns 1-8 of the 48-well plate.")
-
-    return [
-        f"{validated_row}{_validate_48_well_column(col)}"
-        for col in range(start_column, start_column + n_replicates)
-    ]
-
-
-def normalise_condition_row(condition: dict[str, Any]) -> str:
+def build_vertical_triplicate_wells(condition_index: int) -> list[str]:
     """
-    Extract the row assigned to a solvent condition.
+    Build vertical triplicate wells for one solvent condition.
 
-    Accepts either:
-    - {"row": "A"}
-    - {"row": ["A"]}
-    - {"rows": ["A"]}
+    Conditions 1-8 use rows A/B/C across columns 1-8.
+    Conditions 9-16 use rows D/E/F across columns 1-8.
     """
-    if "row" in condition:
-        row = condition["row"]
-    elif "rows" in condition:
-        row = condition["rows"]
+    if not isinstance(condition_index, int) or isinstance(condition_index, bool):
+        raise ValueError("condition_index must be an integer between 1 and 16.")
+
+    if not 1 <= condition_index <= 16:
+        raise ValueError("condition_index must be between 1 and 16 inclusive.")
+
+    if condition_index <= 8:
+        rows = ["A", "B", "C"]
+        column = condition_index
     else:
-        raise ValueError('Each solvent condition must define "row" or "rows".')
+        rows = ["D", "E", "F"]
+        column = condition_index - 8
 
-    if isinstance(row, str):
-        return _normalise_48_well_row(row)
-
-    if isinstance(row, Iterable):
-        row_list = list(row)
-        if len(row_list) != 1:
-            raise ValueError("Each solvent-screen condition must use exactly one row.")
-        return _normalise_48_well_row(row_list[0])
-
-    raise ValueError("Condition row must be a string or a one-item iterable.")
+    return [f"{row}{column}" for row in rows]
 
 
 def build_solvent_screen_plate_map(
     solvent_conditions: dict[str, dict[str, Any]],
     conditions_to_run: list[str],
-    n_replicates: int = 3,
-    start_column: int = 1,
     protocol: Optional[Any] = None,
 ) -> dict[str, dict[str, Any]]:
     """
     Build and validate the target-well map for a solvent screen.
 
-    Each solvent condition occupies one row and uses `n_replicates` wells,
-    e.g. chloroform in A1-A3, methanol in B1-B3.
+    Each solvent condition uses one vertical triplicate block:
+    - target_index 1 -> A1, B1, C1
+    - target_index 8 -> A8, B8, C8
+    - target_index 9 -> D1, E1, F1
+    - target_index 16 -> D8, E8, F8
+
+    If a condition defines "target_index", that block is used. Otherwise,
+    the 1-based order in `conditions_to_run` is used.
     """
     if len(conditions_to_run) == 0:
         raise ValueError("Select at least one solvent condition to run.")
-    if not isinstance(n_replicates, int) or isinstance(n_replicates, bool) or n_replicates <= 0:
-        raise ValueError("n_replicates must be positive.")
-    if len(conditions_to_run) * n_replicates > 48:
-        raise ValueError("Selected solvent-screen wells exceed the 48-well plate layout.")
+
+    if len(set(conditions_to_run)) != len(conditions_to_run):
+        raise ValueError("Duplicate solvent condition names detected in conditions_to_run.")
+
+    if len(conditions_to_run) > 16:
+        raise ValueError("This solvent-screen layout supports at most 16 conditions per 48-well plate.")
 
     used_wells = []
+    used_target_indices = []
     plate_map = {}
 
-    for condition_name in conditions_to_run:
+    for run_order_index, condition_name in enumerate(conditions_to_run, start=1):
         if condition_name not in solvent_conditions:
             raise ValueError(f"Unknown solvent condition: {condition_name}")
 
         condition = solvent_conditions[condition_name]
-        for required_key in ["diamine_source", "dialdehyde_source", "row"]:
+        for required_key in ["diamine_source", "dialdehyde_source"]:
             if required_key not in condition:
                 raise ValueError(f'Solvent condition "{condition_name}" must define "{required_key}".')
             if condition[required_key] is None:
                 raise ValueError(f'Solvent condition "{condition_name}" has no value for "{required_key}".')
 
-        row = normalise_condition_row(condition)
-        target_wells = build_replicate_wells(row=row, n_replicates=n_replicates, start_column=start_column)
+        target_index = condition.get("target_index", run_order_index)
+        target_wells = build_vertical_triplicate_wells(target_index)
+
+        if target_index in used_target_indices:
+            raise ValueError(f"Duplicate target_index detected: {target_index}.")
 
         plate_map[condition_name] = {
             **condition,
-            "row": row,
+            "target_index": target_index,
             "target_wells": target_wells,
         }
+        used_target_indices.append(target_index)
         used_wells.extend(target_wells)
 
-        log_step(protocol, f"Condition: {condition_name} -> {', '.join(target_wells)}")
+        log_step(protocol, f"Condition: {condition_name} -> target index {target_index}: {', '.join(target_wells)}")
 
     if len(set(used_wells)) != len(used_wells):
-        raise ValueError("Duplicate target wells detected. Check solvent-condition row assignments.")
+        raise ValueError("Duplicate target wells detected. Check solvent-condition target indices.")
 
     return plate_map
 

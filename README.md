@@ -26,6 +26,14 @@ opentrons_macrocycle_screening/
 └── .gitignore
 ```
 
+## 🧭 What You Can Do With These Files
+
+- Run kinetic macrocycle screening with vertical triplicates and up to 16 time points on one 48-well plate.
+- Run solvent screening across multiple solvent conditions, including conditions prepared from different 8-well source plates.
+- Run concentration screening by editing per-well diamine, dialdehyde, and chloroform top-up volumes.
+- Use the helper files for plate-map validation, split dispensing, pre-wetting, tip handling, timing records, and notebook-visible logging.
+- Use the calibration notebook and saved PDFs to review chloroform dispense accuracy before running chemistry.
+
 ## 🔧 Requirements
 
 - Opentrons OT-2

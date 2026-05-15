@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sys
 import time
 from datetime import datetime
 from numbers import Real
@@ -41,6 +42,23 @@ def _pipette_max_volume(pipette: Any) -> float:
         return float(getattr(pipette, "max_volume", P300_FALLBACK_MAX_VOLUME))
     except (TypeError, ValueError):
         return float(P300_FALLBACK_MAX_VOLUME)
+
+
+def _drop_tip_or_preserve_original_error(
+    pipette: Any,
+    protocol: Optional[Any],
+    success_message: str,
+) -> None:
+    """Drop a cleanup tip without masking an earlier robot/protocol exception."""
+    active_exception = sys.exc_info()[0] is not None
+    try:
+        pipette.drop_tip()
+    except Exception as exc:
+        log_step(protocol, f"Warning: failed to drop tip during cleanup: {exc}")
+        if not active_exception:
+            raise
+    else:
+        log_step(protocol, success_message)
 
 
 def set_robot_speeds(
@@ -518,11 +536,13 @@ def dispense_to_wells_with_tip_changes(
                 )
     finally:
         if has_tip:
-            pipette.drop_tip()
-            log_step(
-                protocol,
-                f"Dropped final tip {tip_number_for_reagent} for {reagent_name} after "
-                f"{dispenses_since_tip_change} target-well dispense(s)."
+            _drop_tip_or_preserve_original_error(
+                pipette=pipette,
+                protocol=protocol,
+                success_message=(
+                    f"Dropped final tip {tip_number_for_reagent} for {reagent_name} after "
+                    f"{dispenses_since_tip_change} target-well dispense(s)."
+                ),
             )
 
     return dispense_records

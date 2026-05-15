@@ -17,6 +17,7 @@ opentrons_macrocycle_screening/
 ├── conc_opentrons.ipynb
 ├── conc_opentrons_helpers.py
 ├── kinetic_opentrons.ipynb
+├── kinetic_opentrons_20260515.ipynb
 ├── kinetic_opentrons_helpers.py
 ├── solvent_screen_opentrons.ipynb
 ├── solvent_screen_opentrons_helpers.py

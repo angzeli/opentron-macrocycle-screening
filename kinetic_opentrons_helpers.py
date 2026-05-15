@@ -32,6 +32,11 @@ DEFAULT_TRANSFER_MODE = "accurate"  # fast mode = one tip + one pre-wet per reag
 DEFAULT_PIPETTE_DEFAULT_SPEED = 400  # mm/s; Opentrons default is often conservative
 DEFAULT_MAX_HEAD_SPEED = 400         # mm/s for X/Y/Z/A axes when supported
 DEFAULT_TOUCH_TIP_SPEED = 40         # mm/s; keep rim-touching slow to avoid splashing/droplet flicking
+DEFAULT_TOUCH_TIP_RADIUS = 0.75      # fraction of well radius; avoid full-edge moves in large source wells
+DEFAULT_TOUCH_TIP_V_OFFSET = -2      # mm below well top
+DEFAULT_TOUCH_TIP_SAFETY_MARGIN = 3  # mm inside the estimated OT-2 XY travel envelope
+DEFAULT_OT2_X_LIMITS = (0, 418)      # mm, conservative deck-coordinate limits
+DEFAULT_OT2_Y_LIMITS = (0, 356)      # mm, conservative deck-coordinate limits
 
 P300_FALLBACK_MAX_VOLUME = 300
 
@@ -59,6 +64,55 @@ def _drop_tip_or_preserve_original_error(
             raise
     else:
         log_step(protocol, success_message)
+
+
+def estimate_touch_tip_xy_bounds(well: Any, touch_tip_radius: float) -> dict[str, float]:
+    """Estimate the XY deck bounds requested by touch_tip() for one well."""
+    if not 0 < touch_tip_radius <= 1:
+        raise ValueError("touch_tip_radius must be > 0 and <= 1.")
+
+    center = well.top().point
+    diameter = getattr(well, "diameter", None)
+    if diameter is not None:
+        x_reach = y_reach = float(diameter) * touch_tip_radius / 2
+    else:
+        x_reach = float(well.length) * touch_tip_radius / 2
+        y_reach = float(well.width) * touch_tip_radius / 2
+
+    return {
+        "x_min": center.x - x_reach,
+        "x_max": center.x + x_reach,
+        "y_min": center.y - y_reach,
+        "y_max": center.y + y_reach,
+    }
+
+
+def validate_touch_tip_clearance(
+    wells: list[Any],
+    touch_tip_radius: float = DEFAULT_TOUCH_TIP_RADIUS,
+    x_limits: tuple[float, float] = DEFAULT_OT2_X_LIMITS,
+    y_limits: tuple[float, float] = DEFAULT_OT2_Y_LIMITS,
+    safety_margin_mm: float = DEFAULT_TOUCH_TIP_SAFETY_MARGIN,
+) -> None:
+    """Fail before running if an estimated touch-tip path may exceed OT-2 XY limits."""
+    if safety_margin_mm < 0:
+        raise ValueError("safety_margin_mm must be non-negative.")
+
+    x_min_limit, x_max_limit = x_limits
+    y_min_limit, y_max_limit = y_limits
+    for well in wells:
+        bounds = estimate_touch_tip_xy_bounds(well, touch_tip_radius)
+        if (
+            bounds["x_min"] < x_min_limit + safety_margin_mm
+            or bounds["x_max"] > x_max_limit - safety_margin_mm
+            or bounds["y_min"] < y_min_limit + safety_margin_mm
+            or bounds["y_max"] > y_max_limit - safety_margin_mm
+        ):
+            raise ValueError(
+                f"{well} touch-tip path may exceed OT-2 XY travel limits. "
+                f"Estimated bounds: {bounds}. Reduce TOUCH_TIP_RADIUS, move the labware, "
+                "or disable source touch-tip for this deck layout."
+            )
 
 
 def set_robot_speeds(
@@ -315,6 +369,8 @@ def pre_wet_source(
     volume: float = DEFAULT_PRE_WET_VOLUME,
     delay_seconds: float = 5,
     touch_tip_speed: float = DEFAULT_TOUCH_TIP_SPEED,
+    touch_tip_radius: float = DEFAULT_TOUCH_TIP_RADIUS,
+    touch_tip_v_offset: float = DEFAULT_TOUCH_TIP_V_OFFSET,
 ) -> None:
     """Pre-wet the current pipette tip using the correct reagent source.
 
@@ -330,6 +386,7 @@ def pre_wet_source(
 
     if touch_tip_speed <= 0:
         raise ValueError("touch_tip_speed must be positive.")
+    validate_touch_tip_clearance([source_well], touch_tip_radius=touch_tip_radius)
 
     pipette_capacity = _pipette_max_volume(pipette)
     if volume > pipette_capacity:
@@ -346,7 +403,12 @@ def pre_wet_source(
         if original_default_speed is not None:
             pipette.default_speed = touch_tip_speed
 
-        pipette.touch_tip(source_well)
+        pipette.touch_tip(
+            source_well,
+            radius=touch_tip_radius,
+            v_offset=touch_tip_v_offset,
+            speed=touch_tip_speed,
+        )
     finally:
         if original_default_speed is not None:
             pipette.default_speed = original_default_speed
@@ -413,6 +475,8 @@ def dispense_to_wells_with_tip_changes(
     pre_wet_cycles: int = DEFAULT_PRE_WET_CYCLES,
     pre_wet_volume: float = DEFAULT_PRE_WET_VOLUME,
     touch_tip_speed: float = DEFAULT_TOUCH_TIP_SPEED,
+    touch_tip_radius: float = DEFAULT_TOUCH_TIP_RADIUS,
+    touch_tip_v_offset: float = DEFAULT_TOUCH_TIP_V_OFFSET,
     timer_start: Optional[float] = None,
     log_each_dispense_time: bool = True,
     log_absolute_time: bool = True,
@@ -442,6 +506,7 @@ def dispense_to_wells_with_tip_changes(
 
     if transfer_mode not in {"accurate", "fast"}:
         raise ValueError('transfer_mode must be either "accurate" or "fast".')
+    validate_touch_tip_clearance([source_well], touch_tip_radius=touch_tip_radius)
 
     if transfer_mode == "fast":
         effective_tip_change_interval = len(target_well_names)
@@ -477,6 +542,8 @@ def dispense_to_wells_with_tip_changes(
                     cycles=pre_wet_cycles,
                     volume=pre_wet_volume,
                     touch_tip_speed=touch_tip_speed,
+                    touch_tip_radius=touch_tip_radius,
+                    touch_tip_v_offset=touch_tip_v_offset,
                 )
 
             start_timestamp = None

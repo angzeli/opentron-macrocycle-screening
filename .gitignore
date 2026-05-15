@@ -30,6 +30,7 @@ Thumbs.db
 *.log
 run_logs/
 simulation_output/
+opentrons_logs/
 
 # Temporary files
 *.tmp

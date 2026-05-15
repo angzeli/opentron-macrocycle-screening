@@ -19,7 +19,6 @@ DEFAULT_TRANSFER_MODE = "fast"      # "fast" = one tip per reagent/source; "accu
 # Optional robot movement-speed settings.
 # These control gantry/plunger movement speed rather than liquid flow rate.
 DEFAULT_PIPETTE_DEFAULT_SPEED = 400  # mm/s
-DEFAULT_MAX_HEAD_SPEED = 400         # mm/s for X/Y/Z/A axes when supported
 DEFAULT_TOUCH_TIP_SPEED = 40         # mm/s; keep rim-touching slow to avoid droplet flicking
 
 VALID_48_WELL_ROWS = tuple("ABCDEF")
@@ -112,7 +111,7 @@ def set_robot_speeds(
 
     This is separate from aspirate/dispense flow rates:
     - pipette.flow_rate controls liquid transfer speed;
-    - pipette.default_speed and protocol.max_speeds control robot movement speed.
+    - pipette.default_speed controls robot movement speed.
     """
     if pipette_default_speed <= 0:
         raise ValueError("pipette_default_speed must be positive.")
@@ -124,14 +123,6 @@ def set_robot_speeds(
         log_step(protocol, f"Set pipette default movement speed to {pipette_default_speed} mm/s.", echo=echo)
     else:
         log_step(protocol, "Warning: this pipette object does not expose default_speed.", echo=echo)
-
-    if hasattr(protocol, "max_speeds"):
-        for axis in ["X", "Y", "Z", "A"]:
-            protocol.max_speeds[axis] = max_head_speed
-        log_step(protocol, f"Set protocol max head speed to {max_head_speed} mm/s for X/Y/Z/A axes.", echo=echo)
-    else:
-        log_step(protocol, "Warning: this protocol context does not expose max_speeds.", echo=echo)
-
 
 def calculate_dispense(
     total_vol: float,

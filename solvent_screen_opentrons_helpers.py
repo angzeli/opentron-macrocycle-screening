@@ -99,7 +99,6 @@ def set_robot_speeds(
     protocol: Any,
     pipette: Any,
     pipette_default_speed: float = DEFAULT_PIPETTE_DEFAULT_SPEED,
-    max_head_speed: float = DEFAULT_MAX_HEAD_SPEED,
     echo: bool = True,
 ) -> None:
     """
@@ -107,25 +106,16 @@ def set_robot_speeds(
 
     This is separate from aspirate/dispense flow rates:
     - pipette.flow_rate controls liquid transfer speed;
-    - pipette.default_speed and protocol.max_speeds control robot movement speed.
+    - pipette.default_speed control robot movement speed.
     """
     if pipette_default_speed <= 0:
         raise ValueError("pipette_default_speed must be positive.")
-    if max_head_speed <= 0:
-        raise ValueError("max_head_speed must be positive.")
 
     if hasattr(pipette, "default_speed"):
         pipette.default_speed = pipette_default_speed
         log_step(protocol, f"Set pipette default movement speed to {pipette_default_speed} mm/s.", echo=echo)
     else:
         log_step(protocol, "Warning: this pipette object does not expose default_speed.", echo=echo)
-
-    if hasattr(protocol, "max_speeds"):
-        for axis in ["X", "Y", "Z", "A"]:
-            protocol.max_speeds[axis] = max_head_speed
-        log_step(protocol, f"Set protocol max head speed to {max_head_speed} mm/s for X/Y/Z/A axes.", echo=echo)
-    else:
-        log_step(protocol, "Warning: this protocol context does not expose max_speeds.", echo=echo)
 
 
 def calculate_dispense(

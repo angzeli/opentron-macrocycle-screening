@@ -4,9 +4,16 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Iterable, Optional
+
+_RUN_LOGGER = logging.getLogger(__name__)
+_RUN_LOGGER.setLevel(logging.INFO)
+_RUN_LOGGER.propagate = False
+_RUN_LOG_FILE = None
 
 # Default liquid-handling parameters. These can be overridden from the notebook.
 DEFAULT_MAX_DISPENSE = 200          # uL; two thirds of the P300 volume
@@ -33,10 +40,62 @@ def _pipette_max_volume(pipette: Any) -> float:
         return float(P300_FALLBACK_MAX_VOLUME)
 
 
+def setup_run_logger(
+    log_file: Optional[str] = None,
+    log_dir: str = "opentrons_logs",
+    log_prefix: str = "opentrons_run_log",
+    echo: bool = True,
+) -> str:
+    """Configure one notebook-safe text log file for this protocol run."""
+    global _RUN_LOG_FILE
+
+    if log_file is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = Path(log_dir) / f"{log_prefix}_{timestamp}.txt"
+    else:
+        log_path = Path(log_file)
+
+    log_path = log_path.expanduser()
+    if not log_path.is_absolute():
+        log_path = Path.cwd() / log_path
+    log_path = log_path.resolve()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    for handler in list(_RUN_LOGGER.handlers):
+        if isinstance(handler, logging.FileHandler):
+            _RUN_LOGGER.removeHandler(handler)
+            handler.close()
+
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    _RUN_LOGGER.addHandler(file_handler)
+    _RUN_LOGGER.propagate = False
+    _RUN_LOG_FILE = str(log_path)
+
+    if echo:
+        print(f"Run log file: {_RUN_LOG_FILE}")
+
+    return _RUN_LOG_FILE
+
+
+def get_run_log_path() -> Optional[str]:
+    return _RUN_LOG_FILE
+
+
 def log_step(protocol: Optional[Any], message: str, echo: bool = True) -> None:
-    """Print a message in the notebook and also write it to the Opentrons protocol log."""
+    """Print a message in the notebook, text run log, and Opentrons protocol log."""
     if echo:
         print(message)
+    if _RUN_LOGGER.handlers:
+        try:
+            _RUN_LOGGER.info(message)
+        except Exception as exc:
+            if echo:
+                print(f"Warning: failed to write to run log: {exc}")
     if protocol is not None:
         protocol.comment(message)
 

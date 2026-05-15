@@ -10,14 +10,18 @@ The protocols are written for Opentrons API v2.19 and a P300 single-channel Gen2
 
 ```text
 opentrons_macrocycle_screening/
+├── archive/
+│   └── kinetic_opentrons_20260515.ipynb
 ├── calibration/
 │   ├── calibration_curve.ipynb
 │   ├── accuracy_test_chloroform_before_optimisation.pdf
 │   └── accuracy_test_chloroform_after_optimisation.pdf
+├── labware/
+│   ├── greenaway_48_wellplate_3750ul.json
+│   └── greenaway_8_wellplate_20000ul.json
 ├── conc_opentrons.ipynb
 ├── conc_opentrons_helpers.py
 ├── kinetic_opentrons.ipynb
-├── kinetic_opentrons_20260515.ipynb
 ├── kinetic_opentrons_helpers.py
 ├── solvent_screen_opentrons.ipynb
 ├── solvent_screen_opentrons_helpers.py

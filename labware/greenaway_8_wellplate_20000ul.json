@@ -1,0 +1,141 @@
+{
+    "ordering": [
+        [
+            "A1",
+            "B1"
+        ],
+        [
+            "A2",
+            "B2"
+        ],
+        [
+            "A3",
+            "B3"
+        ],
+        [
+            "A4",
+            "B4"
+        ]
+    ],
+    "brand": {
+        "brand": "Greenaway",
+        "brandId": []
+    },
+    "metadata": {
+        "displayName": "Greenaway 8 Well Plate 20000 µL",
+        "displayCategory": "wellPlate",
+        "displayVolumeUnits": "µL",
+        "tags": []
+    },
+    "dimensions": {
+        "xDimension": 127.38,
+        "yDimension": 85.28,
+        "zDimension": 70.4
+    },
+    "wells": {
+        "A1": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 18.6,
+            "y": 62.68,
+            "z": 5
+        },
+        "B1": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 18.6,
+            "y": 22.68,
+            "z": 5
+        },
+        "A2": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 48.6,
+            "y": 62.68,
+            "z": 5
+        },
+        "B2": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 48.6,
+            "y": 22.68,
+            "z": 5
+        },
+        "A3": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 78.6,
+            "y": 62.68,
+            "z": 5
+        },
+        "B3": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 78.6,
+            "y": 22.68,
+            "z": 5
+        },
+        "A4": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 108.6,
+            "y": 62.68,
+            "z": 5
+        },
+        "B4": {
+            "depth": 70.4,
+            "totalLiquidVolume": 27000,
+            "shape": "circular",
+            "diameter": 24.89,
+            "x": 108.6,
+            "y": 22.68,
+            "z": 5
+        }
+    },
+    "groups": [
+        {
+            "metadata": {
+                "wellBottomShape": "flat"
+            },
+            "wells": [
+                "A1",
+                "B1",
+                "A2",
+                "B2",
+                "A3",
+                "B3",
+                "A4",
+                "B4"
+            ]
+        }
+    ],
+    "parameters": {
+        "format": "irregular",
+        "quirks": [],
+        "isTiprack": false,
+        "isMagneticModuleCompatible": false,
+        "loadName": "greenaway_8_wellplate_20000ul"
+    },
+    "namespace": "custom_beta",
+    "version": 1,
+    "schemaVersion": 2,
+    "cornerOffsetFromSlot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+    }
+}

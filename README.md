@@ -11,7 +11,9 @@ The protocols are written for Opentrons API v2.19 and a P300 single-channel Gen2
 ```text
 opentrons_macrocycle_screening/
 ├── archive/
-│   └── kinetic_opentrons_20260515.ipynb
+│   ├── kinetic_opentrons_20260515.ipynb
+│   ├── solvent_screen_opentrons_20260518.ipynb
+│   └── solvent_screen_opentrons_run_log_20260518_084052.txt
 ├── calibration/
 │   ├── calibration_curve.ipynb
 │   ├── accuracy_test_chloroform_before_optimisation.pdf
